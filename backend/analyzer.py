@@ -18,6 +18,8 @@ from parser import LogEntry
 # Helpers
 # ---------------------------------------------------------------------------
 
+RESPONSE_TIME_CAP_MS = 60_000
+
 def _status_class(status: Optional[int]) -> str:
     if status is None:
         return "unknown"
@@ -38,6 +40,14 @@ def _normalize_path(path: str) -> str:
     return re.sub(r"/\d+", "/{id}", path)
 
 
+def _response_times(entries: list[LogEntry]) -> list[float]:
+    return [e.response_ms for e in entries if e.response_ms is not None and e.response_ms >= 0]
+
+
+def _capped_response_times(times: list[float]) -> list[float]:
+    return [t for t in times if t <= RESPONSE_TIME_CAP_MS]
+
+
 # ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
@@ -54,6 +64,9 @@ def compute_summary(entries: list[LogEntry], parse_result) -> dict:
             "time_range_end": None,
             "duration_seconds": None,
             "avg_response_ms": None,
+            "avg_response_ms_cap_ms": RESPONSE_TIME_CAP_MS,
+            "avg_response_ms_excluded": 0,
+            "median_response_ms": None,
             "p95_response_ms": None,
             "p99_response_ms": None,
             "json_line_count": parse_result.json_line_count,
@@ -62,14 +75,16 @@ def compute_summary(entries: list[LogEntry], parse_result) -> dict:
 
     total = len(entries)
     error_entries = [e for e in entries if e.status and e.status >= 400]
-    rt_entries = [e.response_ms for e in entries if e.response_ms is not None]
+    rt_entries = _response_times(entries)
+    capped_rt_entries = _capped_response_times(rt_entries)
 
     timestamps = [e.timestamp for e in entries if e.timestamp]
     ts_start = min(timestamps) if timestamps else None
     ts_end = max(timestamps) if timestamps else None
     duration = (ts_end - ts_start).total_seconds() if ts_start and ts_end else None
 
-    avg_rt = statistics.mean(rt_entries) if rt_entries else None
+    avg_rt = statistics.mean(capped_rt_entries) if capped_rt_entries else None
+    median_rt = statistics.median(rt_entries) if rt_entries else None
     sorted_rt = sorted(rt_entries)
     p95 = sorted_rt[int(len(sorted_rt) * 0.95)] if sorted_rt else None
     p99 = sorted_rt[int(len(sorted_rt) * 0.99)] if sorted_rt else None
@@ -84,6 +99,9 @@ def compute_summary(entries: list[LogEntry], parse_result) -> dict:
         "time_range_end": ts_end.isoformat() if ts_end else None,
         "duration_seconds": round(duration, 1) if duration else None,
         "avg_response_ms": round(avg_rt, 1) if avg_rt is not None else None,
+        "avg_response_ms_cap_ms": RESPONSE_TIME_CAP_MS,
+        "avg_response_ms_excluded": max(len(rt_entries) - len(capped_rt_entries), 0),
+        "median_response_ms": round(median_rt, 1) if median_rt is not None else None,
         "p95_response_ms": round(p95, 1) if p95 is not None else None,
         "p99_response_ms": round(p99, 1) if p99 is not None else None,
         "json_line_count": parse_result.json_line_count,
@@ -121,15 +139,17 @@ def slowest_endpoints(entries: list[LogEntry], top_n: int = 10) -> list[dict]:
     """Return top N endpoint+method combos by average response time."""
     groups: dict[str, list[float]] = defaultdict(list)
     for e in entries:
-        if e.response_ms is not None and e.method and e.path:
+        if e.response_ms is not None and e.response_ms >= 0 and e.method and e.path:
             key = f"{e.method} {_normalize_path(e.path)}"
             groups[key].append(e.response_ms)
 
     results = []
     for endpoint, times in groups.items():
+        capped_times = _capped_response_times(times)
+        avg_source = capped_times if capped_times else times
         results.append({
             "endpoint": endpoint,
-            "avg_ms": round(statistics.mean(times), 1),
+            "avg_ms": round(statistics.mean(avg_source), 1),
             "max_ms": round(max(times), 1),
             "p95_ms": round(sorted(times)[int(len(times) * 0.95)], 1),
             "request_count": len(times),

@@ -255,9 +255,17 @@ export default function Dashboard({
           <div className="kpi__hint">Requests with 4xx/5xx responses.</div>
         </div>
         <div className="kpi">
-          <div className="kpi__label">Avg latency</div>
+          <div className="kpi__label">Avg latency (capped)</div>
           <div className="kpi__value">{formatMilliseconds(summary?.avg_response_ms)}</div>
-          <div className="kpi__hint">Mean response time across parsed requests.</div>
+          <div className="kpi__hint">
+            Capped at {formatMilliseconds(summary?.avg_response_ms_cap_ms)}; excluded{' '}
+            {formatNumber(summary?.avg_response_ms_excluded)} outliers.
+          </div>
+        </div>
+        <div className="kpi">
+          <div className="kpi__label">Median latency</div>
+          <div className="kpi__value">{formatMilliseconds(summary?.median_response_ms)}</div>
+          <div className="kpi__hint">Robust central tendency across parsed requests.</div>
         </div>
         <div className="kpi">
           <div className="kpi__label">P95 latency</div>

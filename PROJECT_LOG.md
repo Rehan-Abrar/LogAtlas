@@ -13,3 +13,5 @@
 - 2026-05-21: Moved y-axis labels into a left column beside the chart to eliminate overlap.
 - 2026-05-21: Tuned the sample log generator for realistic status, latency, and response-time distributions.
 - 2026-05-21: Fixed parser anomaly counting so alternate response-time formats are tracked correctly.
+- 2026-05-22: Added robust latency metrics (capped mean, median) and negative-latency tracking.
+- 2026-05-22: Improved parsing with quoted-field tokenization and stack-trace continuation handling.

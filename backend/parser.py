@@ -19,6 +19,7 @@ Response time formats handled:
 import re
 import json
 import logging
+import shlex
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Optional
@@ -41,6 +42,8 @@ class LogEntry:
     path: Optional[str] = None
     status: Optional[int] = None
     response_ms: Optional[float] = None
+    response_ms_negative: bool = False
+    tokenize_error: bool = False
     source_format: str = "primary"  # "primary" | "json"
     extras: list = field(default_factory=list)
 
@@ -68,7 +71,7 @@ _TS_FORMATS = [
     (re.compile(r"^\d{2}-[A-Za-z]{3}-\d{4} \d{2}:\d{2}:\d{2}"), "%d-%b-%Y %H:%M:%S"),
 ]
 
-_ISO_CLEANUP = re.compile(r"Z$|\+\d{2}:\d{2}$")
+_ISO_CLEANUP = re.compile(r"Z$|[+-]\d{2}:\d{2}$")
 _EPOCH_RE = re.compile(r"^\d{10}$")
 
 
@@ -95,23 +98,27 @@ def _parse_timestamp(token: str) -> Optional[datetime]:
 # Response time parser
 # ---------------------------------------------------------------------------
 
-_RT_MS = re.compile(r"^(\d+(?:\.\d+)?)ms$", re.IGNORECASE)
-_RT_S = re.compile(r"^(\d+(?:\.\d+)?)s$", re.IGNORECASE)
-_RT_BARE = re.compile(r"^(\d+(?:\.\d+)?)$")
+_RT_NUMBER = r"[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?"
+_RT_MS = re.compile(rf"^({_RT_NUMBER})ms$", re.IGNORECASE)
+_RT_S = re.compile(rf"^({_RT_NUMBER})s$", re.IGNORECASE)
+_RT_BARE = re.compile(rf"^({_RT_NUMBER})$")
 
 
-def _parse_response_time(token: str) -> Optional[float]:
-    """Return response time in milliseconds. Returns None if unparseable."""
+def _parse_response_time(token: str) -> tuple[Optional[float], bool]:
+    """Return response time in milliseconds and a negative flag."""
     m = _RT_MS.match(token)
     if m:
-        return float(m.group(1))
+        value = float(m.group(1))
+        return (None, True) if value < 0 else (value, False)
     m = _RT_S.match(token)
     if m:
-        return float(m.group(1)) * 1000.0
+        value = float(m.group(1)) * 1000.0
+        return (None, True) if value < 0 else (value, False)
     m = _RT_BARE.match(token)
     if m:
-        return float(m.group(1))
-    return None
+        value = float(m.group(1))
+        return (None, True) if value < 0 else (value, False)
+    return None, False
 
 
 # ---------------------------------------------------------------------------
@@ -192,8 +199,16 @@ def _parse_json_line(raw: str) -> Optional[LogEntry]:
 
     rt_raw = pick(_JSON_FIELD_MAP["response_ms"])
     if rt_raw is not None:
-        rt = _parse_response_time(str(rt_raw))
-        entry.response_ms = rt if rt is not None else (float(rt_raw) if isinstance(rt_raw, (int, float)) else None)
+        rt, negative = _parse_response_time(str(rt_raw))
+        if negative:
+            entry.response_ms_negative = True
+        if rt is not None:
+            entry.response_ms = rt
+        elif isinstance(rt_raw, (int, float)):
+            if rt_raw < 0:
+                entry.response_ms_negative = True
+            else:
+                entry.response_ms = float(rt_raw)
 
     # Only accept if we got at least timestamp + method + path
     if entry.method and entry.path:
@@ -220,11 +235,12 @@ def _parse_primary_line(raw: str) -> Optional[LogEntry]:
     if not line:
         return None
 
-    tokens = line.split()
+    tokens, tokenize_error = _tokenize_line(line)
     if len(tokens) < 4:
         return None
 
     entry = LogEntry(raw=raw, source_format="primary")
+    entry.tokenize_error = tokenize_error
     idx = 0
 
     # --- Timestamp ---
@@ -278,9 +294,12 @@ def _parse_primary_line(raw: str) -> Optional[LogEntry]:
 
     # --- Response time (optional) ---
     if idx < len(tokens):
-        rt = _parse_response_time(tokens[idx])
-        if rt is not None:
-            entry.response_ms = rt
+        rt, negative = _parse_response_time(tokens[idx])
+        if negative:
+            entry.response_ms_negative = True
+        if rt is not None or negative:
+            if rt is not None:
+                entry.response_ms = rt
             idx += 1
 
     # --- Extras (user agent, referrer, etc.) ---
@@ -319,6 +338,13 @@ def _classify_primary_line(tokens: list[str]) -> tuple[str | None, str | None]:
     return ts_token, rt_token
 
 
+def _tokenize_line(line: str) -> tuple[list[str], bool]:
+    try:
+        return shlex.split(line), False
+    except ValueError:
+        return line.split(), True
+
+
 # ---------------------------------------------------------------------------
 # Main parse function
 # ---------------------------------------------------------------------------
@@ -341,6 +367,9 @@ def parse_log_file(filepath: str) -> ParseResult:
         "missing_status": 0,
         "json_lines": 0,
         "extra_fields": 0,
+        "negative_latency": 0,
+        "continuation_lines": 0,
+        "unbalanced_quotes": 0,
         "malformed": 0,
     }
 
@@ -355,6 +384,17 @@ def parse_log_file(filepath: str) -> ParseResult:
                     anomalies["malformed"] += 1
                     if len(malformed_lines) < _MAX_MALFORMED_SAMPLES:
                         malformed_lines.append(raw_line.rstrip("\n"))
+                    continue
+
+                # Stack traces or continuation lines
+                if raw_line.startswith((" ", "\t")) or line.startswith("at "):
+                    if entries:
+                        entries[-1].extras.append(line)
+                        anomalies["continuation_lines"] += 1
+                        continue
+                    anomalies["malformed"] += 1
+                    if len(malformed_lines) < _MAX_MALFORMED_SAMPLES:
+                        malformed_lines.append(line)
                     continue
 
                 # Try JSON first (lines starting with '{')
@@ -376,18 +416,22 @@ def parse_log_file(filepath: str) -> ParseResult:
                 if entry:
                     # Track anomaly subtypes
                     if entry.source_format == "primary":
-                        tokens = line.split()
+                        tokens, _ = _tokenize_line(line)
                         ts_token, rt_token = _classify_primary_line(tokens)
 
                         if "/" in ts_token or re.match(r"^\d{2}-[A-Za-z]", ts_token) or _EPOCH_RE.match(ts_token):
                             anomalies["alt_timestamp_format"] += 1
 
                         if rt_token and (_RT_S.match(rt_token) or _RT_BARE.match(rt_token)) and not _RT_MS.match(rt_token):
-                                anomalies["alt_response_time_format"] += 1
+                            anomalies["alt_response_time_format"] += 1
                     if entry.status is None:
                         anomalies["missing_status"] += 1
                     if entry.extras:
                         anomalies["extra_fields"] += 1
+                    if entry.response_ms_negative:
+                        anomalies["negative_latency"] += 1
+                    if entry.tokenize_error:
+                        anomalies["unbalanced_quotes"] += 1
                     entries.append(entry)
                 else:
                     anomalies["malformed"] += 1
