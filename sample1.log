@@ -1,0 +1,52 @@
+2024-03-15T14:23:01Z 192.168.1.42 GET /api/users 200 142ms
+2024-03-15T14:23:02Z 10.0.0.7 POST /api/login 401 89ms
+  2024-03-15T14:23:04Z 192.168.1.42 GET /api/users/12 200 53ms
+
+2024/03/15 14:23:05 172.16.0.1 GET /health 200 0.142s
+15-Mar-2024 14:23:06 8.8.8.8 DELETE /api/cache 500 999ms
+1710512581 127.0.0.1 PUT /api/config 204 12
+
+2024-03-15T14:23:07Z 192.168.1.50 GET /api/search?q=hello world 200 42ms
+2024-03-15T14:23:08Z 192.168.1.50 GET "/api/search?q=hello world" 200 42ms
+
+2024-03-15T14:23:09Z 192.168.1.51 GET /api/orders/12345 200 88ms
+2024-03-15T14:23:10Z 192.168.1.51 GET /api/orders/67890 200 90ms
+
+2024-03-15T14:23:11Z 192.168.1.60 GET /api/用户 200 12ms
+2024-03-15T14:23:12Z 192.168.1.61 GET /api/مرحبا 200 15ms
+
+2024-03-15T14:23:13Z 192.168.1.62 GET /api/data - 18ms
+2024-03-15T14:23:14Z 192.168.1.63 GET /api/data ERR 18ms
+
+2024-03-15T14:23:15Z 192.168.1.64 GET /api/slow 200 -20ms
+2024-03-15T14:23:16Z 192.168.1.65 GET /api/slow 200 999999999ms
+
+{"timestamp":"2024-03-15T14:23:17Z","ip":"10.0.0.8","method":"POST","path":"/api/json","status":201,"response_time":"45ms"}
+
+2024-03-15T14:23:18Z 192.168.1.66 GET /api/test 200 44ms "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+2024-03-15T14:23:19Z 192.168.1.67 GET /api/test 200 44ms "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"
+
+2024-03-15T14:23:
+INVALID LOG LINE HERE
+null null null
+
+2024-03-15T14:23:20Z 192.168.1.68 GET /api/crash 500 88ms
+at service.js:42
+at handler.js:88
+at processTicksAndRejections (node:internal/process/task_queues:95:5)
+
+2024-03-15T14:23:21Z 192.168.1.69 GET /api/missing-response-time 200
+2024-03-15T14:23:22Z 192.168.1.70 POST /api/upload 413 5s
+
+2024-03-15T14:23:23+05:00 192.168.1.71 GET /api/timezone 200 32ms
+2024-03-15T09:23:23Z 192.168.1.71 GET /api/timezone 200 32ms
+
+2024-03-15T14:23:24Z 192.168.1.72 GET /api/really/long/path/that/keeps/going/and/going/and/going/and/going/and/going/and/going/and/going/and/going/and/going/and/going?q=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa 200 1ms
+
+2024-03-15T14:23:25Z	192.168.1.73	GET	/api/tabs	200	22ms
+
+2024-99-99T25:61:61Z 192.168.1.74 GET /api/badtime 200 22ms
+
+2024-03-15T14:23:26Z 192.168.1.75 GET /api/duplicate 200 50ms
+2024-03-15T14:23:26Z 192.168.1.75 GET /api/duplicate 200 50ms
+2024-03-15T14:23:26Z 192.168.1.75 GET /api/duplicate 200 50ms
