@@ -85,7 +85,7 @@ def compute_summary(entries: list[LogEntry], parse_result) -> dict:
 
     avg_rt = statistics.mean(capped_rt_entries) if capped_rt_entries else None
     median_rt = statistics.median(rt_entries) if rt_entries else None
-    sorted_rt = sorted(rt_entries)
+    sorted_rt = sorted(capped_rt_entries)
     p95 = sorted_rt[int(len(sorted_rt) * 0.95)] if sorted_rt else None
     p99 = sorted_rt[int(len(sorted_rt) * 0.99)] if sorted_rt else None
 
